@@ -11,6 +11,12 @@ npm run dev
 
 The combined development command starts the local Convex backend and Vite frontend. The first Convex run creates `.env.local`.
 
+Load or refresh the deterministic, visibly fictional development fixtures with:
+
+```bash
+npm run seed
+```
+
 ## Verification
 
 ```bash

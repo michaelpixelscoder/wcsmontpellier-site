@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Menu } from 'lucide-react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
@@ -12,6 +13,8 @@ const primaryNavigation = [
 ]
 
 export function AppShell() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
   return (
     <div className="min-h-svh">
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
@@ -37,10 +40,41 @@ export function AppShell() {
           <Button className="ml-auto hidden sm:inline-flex" render={<Link to={routes.signIn} />}>
             Se connecter
           </Button>
-          <Button className="md:hidden" size="icon" variant="ghost" aria-label="Ouvrir le menu">
+          <Button
+            className="md:hidden"
+            size="icon"
+            variant="ghost"
+            aria-expanded={mobileMenuOpen}
+            aria-controls="mobile-navigation"
+            aria-label={mobileMenuOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
+            onClick={() => setMobileMenuOpen((open) => !open)}
+          >
             <Menu />
           </Button>
         </div>
+        {mobileMenuOpen ? (
+          <nav id="mobile-navigation" className="border-t px-4 py-3 md:hidden" aria-label="Navigation mobile">
+            <div className="mx-auto grid max-w-7xl gap-1">
+              {primaryNavigation.map((item) => (
+                <NavLink
+                  className={({ isActive }) =>
+                    isActive
+                      ? 'rounded-lg bg-muted px-3 py-2 text-sm font-medium'
+                      : 'rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground'
+                  }
+                  key={item.to}
+                  onClick={() => setMobileMenuOpen(false)}
+                  to={item.to}
+                >
+                  {item.label}
+                </NavLink>
+              ))}
+              <NavLink className="rounded-lg px-3 py-2 text-sm font-medium text-primary" onClick={() => setMobileMenuOpen(false)} to={routes.signIn}>
+                Se connecter
+              </NavLink>
+            </div>
+          </nav>
+        ) : null}
       </header>
       <main>
         <Outlet />

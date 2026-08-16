@@ -8,8 +8,17 @@
  * @module
  */
 
+import type * as agenda from "../agenda.js";
 import type * as auth from "../auth.js";
+import type * as classes from "../classes.js";
+import type * as homepage from "../homepage.js";
 import type * as http from "../http.js";
+import type * as lib_authorization from "../lib/authorization.js";
+import type * as lib_publicData from "../lib/publicData.js";
+import type * as lib_publicValidators from "../lib/publicValidators.js";
+import type * as media from "../media.js";
+import type * as seed from "../seed.js";
+import type * as users from "../users.js";
 
 import type {
   ApiFromModules,
@@ -18,8 +27,17 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  agenda: typeof agenda;
   auth: typeof auth;
+  classes: typeof classes;
+  homepage: typeof homepage;
   http: typeof http;
+  "lib/authorization": typeof lib_authorization;
+  "lib/publicData": typeof lib_publicData;
+  "lib/publicValidators": typeof lib_publicValidators;
+  media: typeof media;
+  seed: typeof seed;
+  users: typeof users;
 }>;
 
 /**
