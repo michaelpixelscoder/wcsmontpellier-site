@@ -13,12 +13,15 @@ async function setup() {
     const contributorA = await ctx.db.insert('users', { ...base, email: 'a@test.invalid', role: 'contributor' })
     const contributorB = await ctx.db.insert('users', { ...base, email: 'b@test.invalid', role: 'contributor' })
     const administrator = await ctx.db.insert('users', { ...base, email: 'admin@test.invalid', role: 'administrator' })
+    const level = await ctx.db.insert('levels', { slug: 'test', label: 'Test', description: 'Test', sortOrder: 1, colorToken: 'test' })
+    const season = await ctx.db.insert('seasons', { label: 'Test season', startsOn: '2026-01-01', endsOn: '2026-12-31', isCurrent: true })
     const listing = await ctx.db.insert('listings', {
       slug: 'owned-listing', kind: 'event', title: 'Owned listing', summary: 'Summary', description: 'Description',
       ownerUserId: contributorA, sourceUrl: 'https://example.com/source', status: 'published',
       verificationStatus: 'contributor_verified', updatedAt: 1, version: 1,
     })
-    return { member, contributorA, contributorB, administrator, listing }
+    await ctx.db.insert('events', { listingId: listing, eventType: 'social', beginnerFriendly: true, registrationRequired: false })
+    return { member, contributorA, contributorB, administrator, listing, level, season }
   })
   const asUser = (userId: string) => t.withIdentity({ subject: `${userId}|test-session` })
   return { t, ids, asUser }
@@ -43,7 +46,22 @@ describe('authorization boundaries', () => {
     const { ids, asUser } = await setup()
     await expect(asUser(ids.member).mutation(api.contributions.createDraft, {
       kind: 'class', title: 'A new class', summary: 'Summary', description: 'Description', sourceUrl: 'https://example.com',
+      details: { kind: 'class', seasonId: ids.season, levelId: ids.level, trialAvailable: true, registrationStatus: 'open' },
     })).rejects.toThrow(/permission/)
+  })
+
+  it('creates and reads typed class details for the authenticated owner', async () => {
+    const { ids, asUser } = await setup()
+    const contributor = asUser(ids.contributorA)
+    const listingId = await contributor.mutation(api.contributions.createDraft, {
+      kind: 'class', title: 'Typed class', summary: 'Summary', description: 'Description', sourceUrl: 'https://example.com/class',
+      details: { kind: 'class', seasonId: ids.season, levelId: ids.level, trialAvailable: true, registrationStatus: 'open', priceSummary: 'Free trial' },
+    })
+    const mine = await contributor.query(api.contributions.listMine, {})
+    expect(mine).toContainEqual(expect.objectContaining({
+      id: listingId,
+      details: expect.objectContaining({ kind: 'class', seasonId: ids.season, levelId: ids.level, registrationStatus: 'open' }),
+    }))
   })
 
   it('prevents one contributor from changing another owner’s listing', async () => {
@@ -51,10 +69,12 @@ describe('authorization boundaries', () => {
     await expect(asUser(ids.contributorB).mutation(api.contributions.updateOwn, {
       listingId: ids.listing, expectedVersion: 1, title: 'Hijacked', summary: 'Summary', description: 'Description',
       sourceUrl: 'https://example.com', status: 'draft',
+      details: { kind: 'event', eventType: 'social', beginnerFriendly: true, registrationRequired: false },
     })).rejects.toThrow(/do not own/)
     await expect(asUser(ids.contributorA).mutation(api.contributions.updateOwn, {
       listingId: ids.listing, expectedVersion: 1, title: 'Owner update', summary: 'Summary', description: 'Description',
       sourceUrl: 'https://example.com', status: 'draft',
+      details: { kind: 'event', eventType: 'practice', beginnerFriendly: true, registrationRequired: false },
     })).resolves.toBe(2)
   })
 
@@ -70,6 +90,7 @@ describe('authorization boundaries', () => {
     await expect(asUser(ids.administrator).mutation(api.contributions.updateOwn, {
       listingId: ids.listing, expectedVersion: 1, title: 'Admin correction', summary: 'Summary', description: 'Description',
       sourceUrl: 'https://example.com', status: 'published',
+      details: { kind: 'event', eventType: 'workshop', beginnerFriendly: false, registrationRequired: true },
     })).resolves.toBe(2)
     await expect(asUser(ids.administrator).query(api.administration.listListings, {})).resolves.toEqual([
       expect.objectContaining({ id: ids.listing, title: 'Admin correction', ownerUserId: ids.contributorA }),
@@ -79,7 +100,7 @@ describe('authorization boundaries', () => {
   it('rejects stale writes with an optimistic version conflict', async () => {
     const { ids, asUser } = await setup()
     const owner = asUser(ids.contributorA)
-    const args = { listingId: ids.listing, expectedVersion: 1, title: 'Update', summary: 'Summary', description: 'Description', sourceUrl: 'https://example.com', status: 'draft' as const }
+    const args = { listingId: ids.listing, expectedVersion: 1, title: 'Update', summary: 'Summary', description: 'Description', sourceUrl: 'https://example.com', status: 'draft' as const, details: { kind: 'event' as const, eventType: 'social' as const, beginnerFriendly: true, registrationRequired: false } }
     await owner.mutation(api.contributions.updateOwn, args)
     await expect(owner.mutation(api.contributions.updateOwn, args)).rejects.toThrow(/modifiée/)
   })

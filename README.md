@@ -23,7 +23,18 @@ Create the first administrator by signing up normally, then granting that exact 
 npx convex run administration:grantAdministratorByEmail '{"email":"you@example.com"}'
 ```
 
-Further contributor and administrator roles are managed from `/administration`. Fixture identities use `.invalid` addresses and intentionally cannot sign in.
+Further contributor and administrator roles are managed from `/administration`. Seeded fixture identities use reserved `.invalid` addresses so they cannot receive real email.
+
+The local seed creates these sign-in accounts with password `WcsDemo-2026!`:
+
+| Account | Role |
+| --- | --- |
+| `fixture-admin@wcsmontpellier.invalid` | Administrator |
+| `fixture-contributor-a@wcsmontpellier.invalid` | Contributor A |
+| `fixture-contributor-b@wcsmontpellier.invalid` | Contributor B |
+| `fixture-user@wcsmontpellier.invalid` | Member |
+
+These predictable credentials are development fixtures and must never be seeded into production.
 
 ## Verification
 

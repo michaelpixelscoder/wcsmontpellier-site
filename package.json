@@ -9,7 +9,7 @@
     "dev:vite": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "seed": "convex run seed:seedDemoData",
+    "seed": "convex run seedAll:run",
     "test:e2e": "playwright test",
     "test:backend": "vitest run tests/backend",
     "typecheck": "tsc -b --pretty false",

@@ -21,6 +21,7 @@ import type * as lib_publicData from "../lib/publicData.js";
 import type * as lib_publicValidators from "../lib/publicValidators.js";
 import type * as media from "../media.js";
 import type * as seed from "../seed.js";
+import type * as seedAll from "../seedAll.js";
 import type * as users from "../users.js";
 
 import type {
@@ -43,6 +44,7 @@ declare const fullApi: ApiFromModules<{
   "lib/publicValidators": typeof lib_publicValidators;
   media: typeof media;
   seed: typeof seed;
+  seedAll: typeof seedAll;
   users: typeof users;
 }>;
 

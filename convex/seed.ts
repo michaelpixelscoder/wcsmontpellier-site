@@ -183,7 +183,9 @@ export const seedDemoData = internalMutation({
       await upsertFixtureUser("fixture-contributor-a@wcsmontpellier.invalid", "Contribution Démo A", "contributor"),
       await upsertFixtureUser("fixture-contributor-b@wcsmontpellier.invalid", "Contribution Démo B", "contributor"),
     ];
-    await upsertFixtureUser("fixture-user@wcsmontpellier.invalid", "Membre de démonstration", "user");
+    const memberUserId = await upsertFixtureUser("fixture-user@wcsmontpellier.invalid", "Membre de démonstration", "user");
+    const memberFavorites = await ctx.db.query("favorites").withIndex("by_user_id", (q) => q.eq("userId", memberUserId)).take(200);
+    for (const favorite of memberFavorites) await ctx.db.delete("favorites", favorite._id);
 
     const levels = {
       initiation: await upsertLevel(ctx, {
@@ -531,5 +533,27 @@ export const seedDemoData = internalMutation({
       events: eventFixtures.length,
       occurrences: eventFixtures.length,
     };
+  },
+});
+
+export const prepareExampleAccount = internalMutation({
+  args: { email: v.string() },
+  returns: v.boolean(),
+  handler: async (ctx, { email }) => {
+    const account = await ctx.db
+      .query("authAccounts")
+      .withIndex("providerAndAccountId", (q) => q.eq("provider", "password").eq("providerAccountId", email))
+      .unique();
+    if (account !== null) return false;
+
+    const legacyUsers = await ctx.db.query("users").withIndex("email", (q) => q.eq("email", email)).take(10);
+    for (const legacyUser of legacyUsers) {
+      await ctx.db.patch("users", legacyUser._id, {
+        email: `legacy-${legacyUser._id}@wcsmontpellier.invalid`,
+        status: "deleted",
+        updatedAt: FIXTURE_NOW,
+      });
+    }
+    return true;
   },
 });

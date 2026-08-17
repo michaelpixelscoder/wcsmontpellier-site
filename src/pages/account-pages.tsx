@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useAuthActions } from '@convex-dev/auth/react'
 import { useConvexAuth, useMutation, useQuery } from 'convex/react'
+import type { FunctionReturnType } from 'convex/server'
 import { ExternalLink, Heart, ShieldCheck, Trash2 } from 'lucide-react'
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../../convex/_generated/api'
@@ -33,6 +34,79 @@ function Protected({ children }: { children: React.ReactNode }) {
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message.replace(/^.*?Uncaught Error: /, '') : 'Une erreur est survenue.'
+}
+
+type OwnedListing = FunctionReturnType<typeof api.contributions.listMine>[number]
+type EditorOptions = FunctionReturnType<typeof api.contributions.editorOptions>
+
+function OwnedListingEditor({ item, options }: { item: OwnedListing; options: EditorOptions }) {
+  const update = useMutation(api.contributions.updateOwn)
+  const archive = useMutation(api.contributions.archiveOwn)
+  const [error, setError] = useState('')
+  const [saved, setSaved] = useState(false)
+  const fieldId = (name: string) => `${name}-${item.id}`
+
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setError('')
+    setSaved(false)
+    const form = new FormData(event.currentTarget)
+    try {
+      await update({
+        listingId: item.id,
+        expectedVersion: item.version,
+        title: String(form.get('title')),
+        summary: String(form.get('summary')),
+        description: String(form.get('description')),
+        sourceUrl: String(form.get('sourceUrl')),
+        status: String(form.get('status')) as OwnedListing['status'],
+        details: item.details.kind === 'class' ? {
+          kind: 'class',
+          seasonId: String(form.get('seasonId')) as typeof item.details.seasonId,
+          levelId: String(form.get('levelId')) as typeof item.details.levelId,
+          trialAvailable: form.get('trialAvailable') === 'on',
+          registrationStatus: String(form.get('registrationStatus')) as typeof item.details.registrationStatus,
+          priceSummary: String(form.get('priceSummary') || ''),
+        } : {
+          kind: 'event',
+          eventType: String(form.get('eventType')) as typeof item.details.eventType,
+          beginnerFriendly: form.get('beginnerFriendly') === 'on',
+          registrationRequired: form.get('registrationRequired') === 'on',
+        },
+      })
+      setSaved(true)
+    } catch (caught) { setError(errorMessage(caught)) }
+  }
+
+  return (
+    <Card>
+      <CardHeader><div className="flex justify-between gap-4"><div><CardTitle>{item.title}</CardTitle><p className="mt-1 text-sm text-muted-foreground">{item.kind === 'class' ? 'Cours' : 'Événement'} · {item.status} · v{item.version}</p></div><Button size="icon-sm" variant="ghost" aria-label="Archiver" onClick={() => void archive({ listingId: item.id, expectedVersion: item.version })}><Trash2 /></Button></div></CardHeader>
+      <CardContent>
+        <details><summary className="cursor-pointer font-medium">Modifier la fiche et ses détails</summary>
+          <form className="mt-5 grid gap-4 sm:grid-cols-2" key={item.version} onSubmit={save}>
+            <div className="space-y-2 sm:col-span-2"><Label htmlFor={fieldId('title')}>Titre</Label><Input id={fieldId('title')} name="title" defaultValue={item.title} required /></div>
+            <div className="space-y-2 sm:col-span-2"><Label htmlFor={fieldId('summary')}>Résumé</Label><Input id={fieldId('summary')} name="summary" defaultValue={item.summary} required /></div>
+            <div className="space-y-2 sm:col-span-2"><Label htmlFor={fieldId('description')}>Description</Label><textarea id={fieldId('description')} name="description" defaultValue={item.description} required className="min-h-24 w-full rounded-lg border bg-background p-3 text-sm" /></div>
+            <div className="space-y-2"><Label htmlFor={fieldId('source')}>Source</Label><Input id={fieldId('source')} name="sourceUrl" type="url" defaultValue={item.sourceUrl} required /></div>
+            <div className="space-y-2"><Label htmlFor={fieldId('status')}>Publication</Label><select id={fieldId('status')} name="status" defaultValue={item.status} className="h-9 w-full rounded-lg border bg-background px-3"><option value="draft">Brouillon</option><option value="published">Publié</option><option value="cancelled">Annulé</option><option value="archived">Archivé</option></select></div>
+            {item.details.kind === 'class' ? <>
+              <div className="space-y-2"><Label htmlFor={fieldId('season')}>Saison</Label><select id={fieldId('season')} name="seasonId" defaultValue={item.details.seasonId} className="h-9 w-full rounded-lg border bg-background px-3">{options.seasons.map((season) => <option key={season.id} value={season.id}>{season.label}</option>)}</select></div>
+              <div className="space-y-2"><Label htmlFor={fieldId('level')}>Niveau</Label><select id={fieldId('level')} name="levelId" defaultValue={item.details.levelId} className="h-9 w-full rounded-lg border bg-background px-3">{options.levels.map((level) => <option key={level.id} value={level.id}>{level.label}</option>)}</select></div>
+              <div className="space-y-2"><Label htmlFor={fieldId('registration')}>Inscriptions</Label><select id={fieldId('registration')} name="registrationStatus" defaultValue={item.details.registrationStatus} className="h-9 w-full rounded-lg border bg-background px-3"><option value="unknown">Inconnu</option><option value="open">Ouvertes</option><option value="waitlist">Liste d’attente</option><option value="closed">Fermées</option></select></div>
+              <div className="space-y-2"><Label htmlFor={fieldId('price')}>Tarif résumé</Label><Input id={fieldId('price')} name="priceSummary" defaultValue={item.details.priceSummary} /></div>
+              <label className="flex items-center gap-2"><input name="trialAvailable" type="checkbox" defaultChecked={item.details.trialAvailable} /> Essai possible</label>
+            </> : <>
+              <div className="space-y-2"><Label htmlFor={fieldId('event-type')}>Type d’événement</Label><select id={fieldId('event-type')} name="eventType" defaultValue={item.details.eventType} className="h-9 w-full rounded-lg border bg-background px-3"><option value="social">Soirée</option><option value="practice">Pratique</option><option value="workshop">Stage</option><option value="festival">Festival</option><option value="competition">Compétition</option><option value="open_day">Portes ouvertes</option><option value="other">Autre</option></select></div>
+              <label className="flex items-center gap-2"><input name="beginnerFriendly" type="checkbox" defaultChecked={item.details.beginnerFriendly} /> Débutants bienvenus</label>
+              <label className="flex items-center gap-2"><input name="registrationRequired" type="checkbox" defaultChecked={item.details.registrationRequired} /> Inscription requise</label>
+            </>}
+            {error ? <p role="alert" className="text-sm text-destructive sm:col-span-2">{error}</p> : null}{saved ? <p role="status" className="text-sm text-primary">Modifications enregistrées.</p> : null}
+            <Button className="sm:col-span-2" type="submit">Enregistrer</Button>
+          </form>
+        </details>
+      </CardContent>
+    </Card>
+  )
 }
 
 export function SignInPage() {
@@ -104,10 +178,10 @@ export function ContributionPage() {
   const { isAuthenticated } = useConvexAuth()
   const me = useQuery(api.users.me, isAuthenticated ? {} : 'skip')
   const listings = useQuery(api.contributions.listMine, me?.role === 'contributor' || me?.role === 'administrator' ? {} : 'skip')
+  const options = useQuery(api.contributions.editorOptions, me?.role === 'contributor' || me?.role === 'administrator' ? {} : 'skip')
   const createDraft = useMutation(api.contributions.createDraft)
-  const update = useMutation(api.contributions.updateOwn)
-  const archive = useMutation(api.contributions.archiveOwn)
   const [error, setError] = useState('')
+  const [newKind, setNewKind] = useState<'class' | 'event'>('class')
 
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -116,11 +190,24 @@ export function ContributionPage() {
     const form = new FormData(formElement)
     try {
       await createDraft({
-        kind: String(form.get('kind')) as 'class' | 'event',
+        kind: newKind,
         title: String(form.get('title')),
         summary: String(form.get('summary')),
         description: String(form.get('description')),
         sourceUrl: String(form.get('sourceUrl')),
+        details: newKind === 'class' ? {
+          kind: 'class',
+          seasonId: String(form.get('seasonId')) as NonNullable<typeof options>['seasons'][number]['id'],
+          levelId: String(form.get('levelId')) as NonNullable<typeof options>['levels'][number]['id'],
+          trialAvailable: form.get('trialAvailable') === 'on',
+          registrationStatus: String(form.get('registrationStatus')) as 'unknown' | 'open' | 'waitlist' | 'closed',
+          priceSummary: String(form.get('priceSummary') || ''),
+        } : {
+          kind: 'event',
+          eventType: String(form.get('eventType')) as 'social' | 'practice' | 'workshop' | 'festival' | 'competition' | 'open_day' | 'other',
+          beginnerFriendly: form.get('beginnerFriendly') === 'on',
+          registrationRequired: form.get('registrationRequired') === 'on',
+        },
       })
       formElement.reset()
     } catch (caught) { setError(errorMessage(caught)) }
@@ -133,16 +220,25 @@ export function ContributionPage() {
           <div className="grid gap-8 lg:grid-cols-[22rem_1fr]">
             <form className="grid h-fit gap-4 rounded-xl border bg-card p-5" onSubmit={create}>
               <h2 className="font-semibold">Nouvelle fiche brouillon</h2>
-              <div className="space-y-2"><Label htmlFor="kind">Type</Label><select id="kind" name="kind" className="h-9 rounded-lg border bg-background px-3"><option value="class">Cours</option><option value="event">Événement</option></select></div>
+              <div className="space-y-2"><Label htmlFor="kind">Type</Label><select id="kind" name="kind" className="h-9 rounded-lg border bg-background px-3" value={newKind} onChange={(event) => setNewKind(event.target.value as 'class' | 'event')}><option value="class">Cours</option><option value="event">Événement</option></select></div>
               <div className="space-y-2"><Label htmlFor="title">Titre</Label><Input id="title" name="title" required minLength={3} /></div>
               <div className="space-y-2"><Label htmlFor="summary">Résumé</Label><Input id="summary" name="summary" required /></div>
               <div className="space-y-2"><Label htmlFor="description">Description</Label><textarea id="description" name="description" required className="min-h-24 rounded-lg border bg-background p-3 text-sm" /></div>
               <div className="space-y-2"><Label htmlFor="sourceUrl">Source</Label><Input id="sourceUrl" name="sourceUrl" type="url" required /></div>
+              {newKind === 'class' ? <>
+                <div className="space-y-2"><Label htmlFor="new-season">Saison</Label><select id="new-season" name="seasonId" required className="h-9 rounded-lg border bg-background px-3">{options?.seasons.map((season) => <option key={season.id} value={season.id}>{season.label}</option>)}</select></div>
+                <div className="space-y-2"><Label htmlFor="new-level">Niveau</Label><select id="new-level" name="levelId" required className="h-9 rounded-lg border bg-background px-3">{options?.levels.map((level) => <option key={level.id} value={level.id}>{level.label}</option>)}</select></div>
+                <div className="space-y-2"><Label htmlFor="new-registration">Inscriptions</Label><select id="new-registration" name="registrationStatus" className="h-9 rounded-lg border bg-background px-3"><option value="unknown">Inconnu</option><option value="open">Ouvertes</option><option value="waitlist">Liste d’attente</option><option value="closed">Fermées</option></select></div>
+                <div className="space-y-2"><Label htmlFor="new-price">Tarif résumé</Label><Input id="new-price" name="priceSummary" /></div>
+                <label className="flex items-center gap-2"><input name="trialAvailable" type="checkbox" /> Essai possible</label>
+              </> : <>
+                <div className="space-y-2"><Label htmlFor="new-event-type">Type d’événement</Label><select id="new-event-type" name="eventType" className="h-9 rounded-lg border bg-background px-3"><option value="social">Soirée</option><option value="practice">Pratique</option><option value="workshop">Stage</option><option value="festival">Festival</option><option value="competition">Compétition</option><option value="open_day">Portes ouvertes</option><option value="other">Autre</option></select></div>
+                <label className="flex items-center gap-2"><input name="beginnerFriendly" type="checkbox" /> Débutants bienvenus</label>
+                <label className="flex items-center gap-2"><input name="registrationRequired" type="checkbox" /> Inscription requise</label>
+              </>}
               {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}<Button type="submit">Créer le brouillon</Button>
             </form>
-            <div className="space-y-4"><h2 className="text-lg font-semibold">Mes fiches</h2>{listings === undefined ? <p>Chargement…</p> : listings.length === 0 ? <p className="text-muted-foreground">Aucune fiche.</p> : listings.map((item) => (
-              <Card key={item.id}><CardHeader><div className="flex justify-between gap-4"><div><CardTitle>{item.title}</CardTitle><p className="mt-1 text-sm text-muted-foreground">{item.kind === 'class' ? 'Cours' : 'Événement'} · {item.status} · v{item.version}</p></div><Button size="icon-sm" variant="ghost" aria-label="Archiver" onClick={() => void archive({ listingId: item.id, expectedVersion: item.version })}><Trash2 /></Button></div></CardHeader><CardContent><p>{item.summary}</p></CardContent><CardFooter className="justify-end">{item.status === 'draft' ? <Button size="sm" onClick={() => void update({ listingId: item.id, expectedVersion: item.version, title: item.title, summary: item.summary, description: item.description, sourceUrl: item.sourceUrl, status: 'published' })}>Publier</Button> : <Button size="sm" variant="outline" onClick={() => void update({ listingId: item.id, expectedVersion: item.version, title: item.title, summary: item.summary, description: item.description, sourceUrl: item.sourceUrl, status: 'draft' })}>Repasser en brouillon</Button>}</CardFooter></Card>
-            ))}</div>
+            <div className="space-y-4"><h2 className="text-lg font-semibold">Mes fiches</h2>{listings === undefined || options === undefined ? <p>Chargement…</p> : listings.length === 0 ? <p className="text-muted-foreground">Aucune fiche.</p> : listings.map((item) => <OwnedListingEditor item={item} options={options} key={item.id} />)}</div>
           </div>
         )}
       </PageFrame>

@@ -14,6 +14,21 @@ const listingStatus = v.union(
   v.literal("cancelled"),
   v.literal("archived"),
 );
+const classDetails = v.object({
+  kind: v.literal("class"),
+  seasonId: v.id("seasons"),
+  levelId: v.id("levels"),
+  trialAvailable: v.boolean(),
+  registrationStatus: v.union(v.literal("unknown"), v.literal("open"), v.literal("waitlist"), v.literal("closed")),
+  priceSummary: v.optional(v.string()),
+});
+const eventDetails = v.object({
+  kind: v.literal("event"),
+  eventType: v.union(v.literal("social"), v.literal("practice"), v.literal("workshop"), v.literal("festival"), v.literal("competition"), v.literal("open_day"), v.literal("other")),
+  beginnerFriendly: v.boolean(),
+  registrationRequired: v.boolean(),
+});
+const listingDetails = v.union(classDetails, eventDetails);
 const ownedListing = v.object({
   id: v.id("listings"),
   kind,
@@ -24,6 +39,7 @@ const ownedListing = v.object({
   status: listingStatus,
   version: v.number(),
   updatedAt: v.number(),
+  details: listingDetails,
 });
 
 function slugify(value: string): string {
@@ -58,17 +74,35 @@ export const listMine = contributorQuery({
       .withIndex("by_owner_user_id", (q) => q.eq("ownerUserId", ctx.user._id))
       .order("desc")
       .take(100);
-    return listings.filter((listing) => listing.deletedAt === undefined).map((listing) => ({
-      id: listing._id,
-      kind: listing.kind,
-      title: listing.title,
-      summary: listing.summary,
-      description: listing.description,
-      sourceUrl: listing.sourceUrl,
-      status: listing.status,
-      version: listing.version,
-      updatedAt: listing.updatedAt,
-    }));
+    const activeListings = listings.filter((listing) => listing.deletedAt === undefined);
+    return (await Promise.all(activeListings.map(async (listing) => {
+      if (listing.kind === "class") {
+        const row = await ctx.db.query("classes").withIndex("by_listing_id", (q) => q.eq("listingId", listing._id)).unique();
+        if (row === null) return null;
+        return { id: listing._id, kind: listing.kind, title: listing.title, summary: listing.summary, description: listing.description, sourceUrl: listing.sourceUrl, status: listing.status, version: listing.version, updatedAt: listing.updatedAt, details: { kind: "class" as const, seasonId: row.seasonId, levelId: row.levelId, trialAvailable: row.trialAvailable, registrationStatus: row.registrationStatus, priceSummary: row.priceSummary } };
+      }
+      const row = await ctx.db.query("events").withIndex("by_listing_id", (q) => q.eq("listingId", listing._id)).unique();
+      if (row === null) return null;
+      return { id: listing._id, kind: listing.kind, title: listing.title, summary: listing.summary, description: listing.description, sourceUrl: listing.sourceUrl, status: listing.status, version: listing.version, updatedAt: listing.updatedAt, details: { kind: "event" as const, eventType: row.eventType, beginnerFriendly: row.beginnerFriendly, registrationRequired: row.registrationRequired } };
+    }))).filter((listing): listing is NonNullable<typeof listing> => listing !== null);
+  },
+});
+
+export const editorOptions = contributorQuery({
+  args: {},
+  returns: v.object({
+    levels: v.array(v.object({ id: v.id("levels"), label: v.string() })),
+    seasons: v.array(v.object({ id: v.id("seasons"), label: v.string(), isCurrent: v.boolean() })),
+  }),
+  handler: async (ctx) => {
+    const [levels, seasons] = await Promise.all([
+      ctx.db.query("levels").withIndex("by_sort_order").take(100),
+      ctx.db.query("seasons").withIndex("by_starts_on").order("desc").take(20),
+    ]);
+    return {
+      levels: levels.map((level) => ({ id: level._id, label: level.label })),
+      seasons: seasons.map((season) => ({ id: season._id, label: season.label, isCurrent: season.isCurrent })),
+    };
   },
 });
 
@@ -79,12 +113,14 @@ export const createDraft = contributorMutation({
     summary: v.string(),
     description: v.string(),
     sourceUrl: v.string(),
+    details: listingDetails,
   },
   returns: v.id("listings"),
   handler: async (ctx, args) => {
     const title = args.title.trim();
     if (title.length < 3) throw new ConvexError({ code: "INVALID_INPUT", message: "Titre trop court." });
     const now = Date.now();
+    if (args.kind !== args.details.kind) throw new ConvexError({ code: "INVALID_INPUT", message: "Le type de fiche et ses détails ne correspondent pas." });
     const id = await ctx.db.insert("listings", {
       slug: `${slugify(title)}-${now.toString(36)}`,
       kind: args.kind,
@@ -98,6 +134,13 @@ export const createDraft = contributorMutation({
       updatedAt: now,
       version: 1,
     });
+    if (args.details.kind === "class") {
+      const [season, level] = await Promise.all([ctx.db.get("seasons", args.details.seasonId), ctx.db.get("levels", args.details.levelId)]);
+      if (season === null || level === null) throw new ConvexError({ code: "INVALID_REFERENCE", message: "Saison ou niveau introuvable." });
+      await ctx.db.insert("classes", { listingId: id, seasonId: args.details.seasonId, levelId: args.details.levelId, trialAvailable: args.details.trialAvailable, registrationStatus: args.details.registrationStatus, priceSummary: args.details.priceSummary?.trim() || undefined });
+    } else {
+      await ctx.db.insert("events", { listingId: id, eventType: args.details.eventType, beginnerFriendly: args.details.beginnerFriendly, registrationRequired: args.details.registrationRequired });
+    }
     await audit(ctx, "listing.created", id, undefined, { kind: args.kind, title, status: "draft" });
     return id;
   },
@@ -112,6 +155,7 @@ export const updateOwn = contributorMutation({
     description: v.string(),
     sourceUrl: v.string(),
     status: listingStatus,
+    details: listingDetails,
   },
   returns: v.number(),
   handler: async (ctx, args) => {
@@ -119,6 +163,7 @@ export const updateOwn = contributorMutation({
     if (listing === null || listing.deletedAt !== undefined) throw new ConvexError({ code: "NOT_FOUND", message: "Fiche introuvable." });
     requireListingOwnerOrAdministrator(ctx.user, listing.ownerUserId);
     if (listing.version !== args.expectedVersion) throw new ConvexError({ code: "VERSION_CONFLICT", message: "Cette fiche a été modifiée. Rechargez-la." });
+    if (listing.kind !== args.details.kind) throw new ConvexError({ code: "INVALID_INPUT", message: "Le type de fiche ne peut pas être modifié." });
     const nextVersion = listing.version + 1;
     const patch = {
       title: args.title.trim(),
@@ -131,6 +176,19 @@ export const updateOwn = contributorMutation({
       version: nextVersion,
     };
     await ctx.db.patch("listings", listing._id, patch);
+    if (args.details.kind === "class") {
+      const [row, season, level] = await Promise.all([
+        ctx.db.query("classes").withIndex("by_listing_id", (q) => q.eq("listingId", listing._id)).unique(),
+        ctx.db.get("seasons", args.details.seasonId),
+        ctx.db.get("levels", args.details.levelId),
+      ]);
+      if (row === null || season === null || level === null) throw new ConvexError({ code: "INVALID_REFERENCE", message: "Détails de cours incomplets." });
+      await ctx.db.patch("classes", row._id, { seasonId: args.details.seasonId, levelId: args.details.levelId, trialAvailable: args.details.trialAvailable, registrationStatus: args.details.registrationStatus, priceSummary: args.details.priceSummary?.trim() || undefined });
+    } else {
+      const row = await ctx.db.query("events").withIndex("by_listing_id", (q) => q.eq("listingId", listing._id)).unique();
+      if (row === null) throw new ConvexError({ code: "INVALID_REFERENCE", message: "Détails d’événement incomplets." });
+      await ctx.db.patch("events", row._id, { eventType: args.details.eventType, beginnerFriendly: args.details.beginnerFriendly, registrationRequired: args.details.registrationRequired });
+    }
     await audit(ctx, "listing.updated", listing._id, { version: listing.version, status: listing.status }, { version: nextVersion, status: args.status });
     return nextVersion;
   },
