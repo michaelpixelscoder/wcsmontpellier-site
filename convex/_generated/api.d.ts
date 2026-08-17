@@ -20,6 +20,7 @@ import type * as lib_authorization from "../lib/authorization.js";
 import type * as lib_publicData from "../lib/publicData.js";
 import type * as lib_publicValidators from "../lib/publicValidators.js";
 import type * as media from "../media.js";
+import type * as references from "../references.js";
 import type * as seed from "../seed.js";
 import type * as seedAll from "../seedAll.js";
 import type * as users from "../users.js";
@@ -43,6 +44,7 @@ declare const fullApi: ApiFromModules<{
   "lib/publicData": typeof lib_publicData;
   "lib/publicValidators": typeof lib_publicValidators;
   media: typeof media;
+  references: typeof references;
   seed: typeof seed;
   seedAll: typeof seedAll;
   users: typeof users;

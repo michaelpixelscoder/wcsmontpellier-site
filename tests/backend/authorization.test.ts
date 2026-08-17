@@ -80,6 +80,19 @@ describe('authorization boundaries', () => {
     })).rejects.toThrow(/lieu, un horaire/)
   })
 
+  it('keeps contributor-created places and intervenants owner-scoped', async () => {
+    const { ids, asUser } = await setup()
+    const owner = asUser(ids.contributorA)
+    const outsider = asUser(ids.contributorB)
+    const placeId = await owner.mutation(api.references.createPlace, { name: 'Owned place', addressLine1: '1 Test', postalCode: '34000', city: 'Montpellier', countryCode: 'FR', latitude: 43.6, longitude: 3.88 })
+    await expect(outsider.mutation(api.references.updatePlace, { placeId, name: 'Hijacked', addressLine1: '1 Test', postalCode: '34000', city: 'Montpellier', countryCode: 'FR', latitude: 43.6, longitude: 3.88 })).rejects.toThrow(/gérez pas/)
+    const actorId = await owner.mutation(api.references.createActor, { name: 'Owned actor', summary: 'A complete summary.' })
+    await expect(outsider.mutation(api.references.updateActor, { actorId, name: 'Hijacked', summary: 'A complete summary.' })).rejects.toThrow(/gérez pas/)
+    const mine = await owner.query(api.references.listMine, {})
+    expect(mine.places).toContainEqual(expect.objectContaining({ id: placeId, name: 'Owned place' }))
+    expect(mine.actors).toContainEqual(expect.objectContaining({ id: actorId, name: 'Owned actor' }))
+  })
+
   it('prevents one contributor from changing another owner’s listing', async () => {
     const { ids, asUser } = await setup()
     await expect(asUser(ids.contributorB).mutation(api.contributions.updateOwn, {

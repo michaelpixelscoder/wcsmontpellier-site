@@ -133,12 +133,14 @@ export default defineSchema({
     arrivalNotes: v.optional(v.string()),
     badgeMediaId: v.optional(v.id("mediaAssets")),
     heroMediaId: v.optional(v.id("mediaAssets")),
+    ownerUserId: v.optional(v.id("users")),
     status: publicationStatus,
     lastVerifiedAt: v.optional(v.number()),
     updatedAt: v.number(),
   })
     .index("by_slug", ["slug"])
     .index("by_status", ["status"])
+    .index("by_owner_user_id", ["ownerUserId"])
     .index("by_city_and_status", ["city", "status"])
     .searchIndex("search_name", {
       searchField: "name",
