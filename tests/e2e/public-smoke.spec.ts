@@ -17,7 +17,7 @@ test('public vertical slice renders and filters without browser errors', async (
 
   await page.goto('/')
   await expect(page.getByRole('heading', { name: /Trouvez où apprendre et danser/ })).toBeVisible()
-  await expect(page.getByText('Pratique libre à Antigone (démo)')).toBeVisible()
+  await expect(page.getByRole('img', { name: /fontaine des Trois Grâces/ })).toBeVisible()
 
   const firstMapTile = page.waitForResponse(
     (response) => response.url().includes('tile.openstreetmap.org') && response.ok(),
@@ -53,5 +53,29 @@ test('mobile navigation reaches the course planner without browser errors', asyn
   await page.getByRole('button', { name: 'Ouvrir le menu' }).click()
   await page.getByRole('navigation', { name: 'Navigation mobile' }).getByRole('link', { name: 'Cours' }).click()
   await expect(page.getByRole('heading', { name: 'Planifier ses cours' })).toBeVisible()
+  expect(browserErrors, browserErrors.join('\n')).toEqual([])
+})
+
+test('editorial pages render their Montpellier heroes and calls to action', async ({ page }) => {
+  const browserErrors = watchBrowserErrors(page)
+
+  await page.goto('/')
+  const homeHero = page.getByRole('img', { name: /fontaine des Trois Grâces/ })
+  await expect(homeHero).toBeVisible()
+  await expect(homeHero).toHaveJSProperty('complete', true)
+
+  await page.goto('/decouvrir')
+  await expect(page.getByRole('heading', { name: /une danse à deux qui s’invente/ })).toBeVisible()
+  await expect(page.getByRole('img', { name: /promenade du Peyrou/ })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Plus une conversation qu’une démonstration' })).toBeVisible()
+  await page.getByRole('button', { name: 'Faire ses premiers pas' }).click()
+  await expect(page).toHaveURL(/\/debuter$/)
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(page.getByRole('heading', { name: /commence sans prérequis/ })).toBeVisible()
+  await expect(page.getByRole('img', { name: /quartier Antigone/ })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Trois façons simples de se lancer' })).toBeVisible()
+  await expect(page.locator('body')).toHaveJSProperty('scrollWidth', 390)
+
   expect(browserErrors, browserErrors.join('\n')).toEqual([])
 })
