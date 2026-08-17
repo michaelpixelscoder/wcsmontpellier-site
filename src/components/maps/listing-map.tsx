@@ -1,5 +1,29 @@
 import { useEffect, useRef } from 'react'
 import * as maplibregl from 'maplibre-gl'
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
+
+maplibregl.setWorkerUrl(maplibreWorkerUrl)
+
+const mapStyle: maplibregl.StyleSpecification = {
+  version: 8,
+  sources: {
+    openStreetMap: {
+      type: 'raster',
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      minzoom: 0,
+      maxzoom: 19,
+      attribution: '© OpenStreetMap contributors',
+    },
+  },
+  layers: [
+    {
+      id: 'open-street-map',
+      type: 'raster',
+      source: 'openStreetMap',
+    },
+  ],
+}
 
 export type MapLocation = {
   id: string
@@ -19,7 +43,7 @@ export function ListingMap({ locations }: { locations: MapLocation[] }) {
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: 'https://demotiles.maplibre.org/style.json',
+      style: mapStyle,
       center: [3.8767, 43.6108],
       zoom: 11,
     })

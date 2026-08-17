@@ -22,5 +22,6 @@ npm run seed
 ```bash
 npm run typecheck
 npm run lint
+npm run test:e2e
 npm run build
 ```
