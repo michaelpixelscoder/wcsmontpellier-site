@@ -36,6 +36,13 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message.replace(/^.*?Uncaught Error: /, '') : 'Une erreur est survenue.'
 }
 
+function toLocalDateTime(value: number | undefined) {
+  if (value === undefined) return ''
+  const date = new Date(value)
+  const offset = date.getTimezoneOffset() * 60_000
+  return new Date(value - offset).toISOString().slice(0, 16)
+}
+
 type OwnedListing = FunctionReturnType<typeof api.contributions.listMine>[number]
 type EditorOptions = FunctionReturnType<typeof api.contributions.editorOptions>
 
@@ -67,11 +74,27 @@ function OwnedListingEditor({ item, options }: { item: OwnedListing; options: Ed
           trialAvailable: form.get('trialAvailable') === 'on',
           registrationStatus: String(form.get('registrationStatus')) as typeof item.details.registrationStatus,
           priceSummary: String(form.get('priceSummary') || ''),
+          teacherIds: [String(form.get('teacherId')) as EditorOptions['actors'][number]['id']],
+          schedule: {
+            placeId: String(form.get('placeId')) as EditorOptions['places'][number]['id'],
+            weekdays: [String(form.get('weekday')) as NonNullable<typeof item.details.schedule>['weekdays'][number]],
+            localStartTime: String(form.get('localStartTime')),
+            localEndTime: String(form.get('localEndTime')),
+            startsOn: String(form.get('startsOn')),
+            endsOn: String(form.get('endsOn')),
+          },
         } : {
           kind: 'event',
           eventType: String(form.get('eventType')) as typeof item.details.eventType,
           beginnerFriendly: form.get('beginnerFriendly') === 'on',
           registrationRequired: form.get('registrationRequired') === 'on',
+          organizerIds: [String(form.get('organizerId')) as EditorOptions['actors'][number]['id']],
+          occurrence: {
+            placeId: String(form.get('placeId')) as EditorOptions['places'][number]['id'],
+            startsAt: new Date(String(form.get('startsAt'))).getTime(),
+            endsAt: new Date(String(form.get('endsAt'))).getTime(),
+            status: String(form.get('occurrenceStatus')) as NonNullable<typeof item.details.occurrence>['status'],
+          },
         },
       })
       setSaved(true)
@@ -94,9 +117,21 @@ function OwnedListingEditor({ item, options }: { item: OwnedListing; options: Ed
               <div className="space-y-2"><Label htmlFor={fieldId('level')}>Niveau</Label><select id={fieldId('level')} name="levelId" defaultValue={item.details.levelId} className="h-9 w-full rounded-lg border bg-background px-3">{options.levels.map((level) => <option key={level.id} value={level.id}>{level.label}</option>)}</select></div>
               <div className="space-y-2"><Label htmlFor={fieldId('registration')}>Inscriptions</Label><select id={fieldId('registration')} name="registrationStatus" defaultValue={item.details.registrationStatus} className="h-9 w-full rounded-lg border bg-background px-3"><option value="unknown">Inconnu</option><option value="open">Ouvertes</option><option value="waitlist">Liste d’attente</option><option value="closed">Fermées</option></select></div>
               <div className="space-y-2"><Label htmlFor={fieldId('price')}>Tarif résumé</Label><Input id={fieldId('price')} name="priceSummary" defaultValue={item.details.priceSummary} /></div>
+              <div className="space-y-2"><Label htmlFor={fieldId('teacher')}>Enseignant</Label><select id={fieldId('teacher')} name="teacherId" defaultValue={item.details.teacherIds?.[0]} required className="h-9 w-full rounded-lg border bg-background px-3">{(options.actors ?? []).map((actor) => <option key={actor.id} value={actor.id}>{actor.name}</option>)}</select></div>
+              <div className="space-y-2"><Label htmlFor={fieldId('place')}>Lieu</Label><select id={fieldId('place')} name="placeId" defaultValue={item.details.schedule?.placeId} required className="h-9 w-full rounded-lg border bg-background px-3">{(options.places ?? []).map((place) => <option key={place.id} value={place.id}>{place.name} · {place.city}</option>)}</select></div>
+              <div className="space-y-2"><Label htmlFor={fieldId('weekday')}>Jour</Label><select id={fieldId('weekday')} name="weekday" defaultValue={item.details.schedule?.weekdays[0] ?? 'monday'} className="h-9 w-full rounded-lg border bg-background px-3"><option value="monday">Lundi</option><option value="tuesday">Mardi</option><option value="wednesday">Mercredi</option><option value="thursday">Jeudi</option><option value="friday">Vendredi</option><option value="saturday">Samedi</option><option value="sunday">Dimanche</option></select></div>
+              <div className="space-y-2"><Label htmlFor={fieldId('start-time')}>Début du cours</Label><Input id={fieldId('start-time')} name="localStartTime" type="time" defaultValue={item.details.schedule?.localStartTime ?? '19:00'} required /></div>
+              <div className="space-y-2"><Label htmlFor={fieldId('end-time')}>Fin du cours</Label><Input id={fieldId('end-time')} name="localEndTime" type="time" defaultValue={item.details.schedule?.localEndTime ?? '20:00'} required /></div>
+              <div className="space-y-2"><Label htmlFor={fieldId('starts-on')}>Début de période</Label><Input id={fieldId('starts-on')} name="startsOn" type="date" defaultValue={item.details.schedule?.startsOn ?? '2026-09-01'} required /></div>
+              <div className="space-y-2"><Label htmlFor={fieldId('ends-on')}>Fin de période</Label><Input id={fieldId('ends-on')} name="endsOn" type="date" defaultValue={item.details.schedule?.endsOn ?? '2027-06-30'} required /></div>
               <label className="flex items-center gap-2"><input name="trialAvailable" type="checkbox" defaultChecked={item.details.trialAvailable} /> Essai possible</label>
             </> : <>
               <div className="space-y-2"><Label htmlFor={fieldId('event-type')}>Type d’événement</Label><select id={fieldId('event-type')} name="eventType" defaultValue={item.details.eventType} className="h-9 w-full rounded-lg border bg-background px-3"><option value="social">Soirée</option><option value="practice">Pratique</option><option value="workshop">Stage</option><option value="festival">Festival</option><option value="competition">Compétition</option><option value="open_day">Portes ouvertes</option><option value="other">Autre</option></select></div>
+              <div className="space-y-2"><Label htmlFor={fieldId('organizer')}>Organisateur</Label><select id={fieldId('organizer')} name="organizerId" defaultValue={item.details.organizerIds?.[0]} required className="h-9 w-full rounded-lg border bg-background px-3">{(options.actors ?? []).map((actor) => <option key={actor.id} value={actor.id}>{actor.name}</option>)}</select></div>
+              <div className="space-y-2"><Label htmlFor={fieldId('place')}>Lieu</Label><select id={fieldId('place')} name="placeId" defaultValue={item.details.occurrence?.placeId} required className="h-9 w-full rounded-lg border bg-background px-3">{(options.places ?? []).map((place) => <option key={place.id} value={place.id}>{place.name} · {place.city}</option>)}</select></div>
+              <div className="space-y-2"><Label htmlFor={fieldId('starts-at')}>Début</Label><Input id={fieldId('starts-at')} name="startsAt" type="datetime-local" defaultValue={toLocalDateTime(item.details.occurrence?.startsAt)} required /></div>
+              <div className="space-y-2"><Label htmlFor={fieldId('ends-at')}>Fin</Label><Input id={fieldId('ends-at')} name="endsAt" type="datetime-local" defaultValue={toLocalDateTime(item.details.occurrence?.endsAt)} required /></div>
+              <div className="space-y-2"><Label htmlFor={fieldId('occurrence-status')}>État de la date</Label><select id={fieldId('occurrence-status')} name="occurrenceStatus" defaultValue={item.details.occurrence?.status ?? 'scheduled'} className="h-9 w-full rounded-lg border bg-background px-3"><option value="scheduled">Confirmé</option><option value="confirmation_pending">À confirmer</option><option value="cancelled">Annulé</option><option value="completed">Terminé</option></select></div>
               <label className="flex items-center gap-2"><input name="beginnerFriendly" type="checkbox" defaultChecked={item.details.beginnerFriendly} /> Débutants bienvenus</label>
               <label className="flex items-center gap-2"><input name="registrationRequired" type="checkbox" defaultChecked={item.details.registrationRequired} /> Inscription requise</label>
             </>}
@@ -202,11 +237,27 @@ export function ContributionPage() {
           trialAvailable: form.get('trialAvailable') === 'on',
           registrationStatus: String(form.get('registrationStatus')) as 'unknown' | 'open' | 'waitlist' | 'closed',
           priceSummary: String(form.get('priceSummary') || ''),
+          teacherIds: [String(form.get('teacherId')) as NonNullable<typeof options>['actors'][number]['id']],
+          schedule: {
+            placeId: String(form.get('placeId')) as NonNullable<typeof options>['places'][number]['id'],
+            weekdays: [String(form.get('weekday')) as 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday'],
+            localStartTime: String(form.get('localStartTime')),
+            localEndTime: String(form.get('localEndTime')),
+            startsOn: String(form.get('startsOn')),
+            endsOn: String(form.get('endsOn')),
+          },
         } : {
           kind: 'event',
           eventType: String(form.get('eventType')) as 'social' | 'practice' | 'workshop' | 'festival' | 'competition' | 'open_day' | 'other',
           beginnerFriendly: form.get('beginnerFriendly') === 'on',
           registrationRequired: form.get('registrationRequired') === 'on',
+          organizerIds: [String(form.get('organizerId')) as NonNullable<typeof options>['actors'][number]['id']],
+          occurrence: {
+            placeId: String(form.get('placeId')) as NonNullable<typeof options>['places'][number]['id'],
+            startsAt: new Date(String(form.get('startsAt'))).getTime(),
+            endsAt: new Date(String(form.get('endsAt'))).getTime(),
+            status: String(form.get('occurrenceStatus')) as 'scheduled' | 'confirmation_pending' | 'cancelled' | 'completed',
+          },
         },
       })
       formElement.reset()
@@ -230,9 +281,21 @@ export function ContributionPage() {
                 <div className="space-y-2"><Label htmlFor="new-level">Niveau</Label><select id="new-level" name="levelId" required className="h-9 rounded-lg border bg-background px-3">{options?.levels.map((level) => <option key={level.id} value={level.id}>{level.label}</option>)}</select></div>
                 <div className="space-y-2"><Label htmlFor="new-registration">Inscriptions</Label><select id="new-registration" name="registrationStatus" className="h-9 rounded-lg border bg-background px-3"><option value="unknown">Inconnu</option><option value="open">Ouvertes</option><option value="waitlist">Liste d’attente</option><option value="closed">Fermées</option></select></div>
                 <div className="space-y-2"><Label htmlFor="new-price">Tarif résumé</Label><Input id="new-price" name="priceSummary" /></div>
+                <div className="space-y-2"><Label htmlFor="new-teacher">Enseignant</Label><select id="new-teacher" name="teacherId" required className="h-9 rounded-lg border bg-background px-3">{(options?.actors ?? []).map((actor) => <option key={actor.id} value={actor.id}>{actor.name}</option>)}</select></div>
+                <div className="space-y-2"><Label htmlFor="new-class-place">Lieu</Label><select id="new-class-place" name="placeId" required className="h-9 rounded-lg border bg-background px-3">{(options?.places ?? []).map((place) => <option key={place.id} value={place.id}>{place.name} · {place.city}</option>)}</select></div>
+                <div className="space-y-2"><Label htmlFor="new-weekday">Jour</Label><select id="new-weekday" name="weekday" className="h-9 rounded-lg border bg-background px-3"><option value="monday">Lundi</option><option value="tuesday">Mardi</option><option value="wednesday">Mercredi</option><option value="thursday">Jeudi</option><option value="friday">Vendredi</option><option value="saturday">Samedi</option><option value="sunday">Dimanche</option></select></div>
+                <div className="space-y-2"><Label htmlFor="new-start-time">Début du cours</Label><Input id="new-start-time" name="localStartTime" type="time" defaultValue="19:00" required /></div>
+                <div className="space-y-2"><Label htmlFor="new-end-time">Fin du cours</Label><Input id="new-end-time" name="localEndTime" type="time" defaultValue="20:00" required /></div>
+                <div className="space-y-2"><Label htmlFor="new-starts-on">Début de période</Label><Input id="new-starts-on" name="startsOn" type="date" defaultValue="2026-09-01" required /></div>
+                <div className="space-y-2"><Label htmlFor="new-ends-on">Fin de période</Label><Input id="new-ends-on" name="endsOn" type="date" defaultValue="2027-06-30" required /></div>
                 <label className="flex items-center gap-2"><input name="trialAvailable" type="checkbox" /> Essai possible</label>
               </> : <>
                 <div className="space-y-2"><Label htmlFor="new-event-type">Type d’événement</Label><select id="new-event-type" name="eventType" className="h-9 rounded-lg border bg-background px-3"><option value="social">Soirée</option><option value="practice">Pratique</option><option value="workshop">Stage</option><option value="festival">Festival</option><option value="competition">Compétition</option><option value="open_day">Portes ouvertes</option><option value="other">Autre</option></select></div>
+                <div className="space-y-2"><Label htmlFor="new-organizer">Organisateur</Label><select id="new-organizer" name="organizerId" required className="h-9 rounded-lg border bg-background px-3">{(options?.actors ?? []).map((actor) => <option key={actor.id} value={actor.id}>{actor.name}</option>)}</select></div>
+                <div className="space-y-2"><Label htmlFor="new-event-place">Lieu</Label><select id="new-event-place" name="placeId" required className="h-9 rounded-lg border bg-background px-3">{(options?.places ?? []).map((place) => <option key={place.id} value={place.id}>{place.name} · {place.city}</option>)}</select></div>
+                <div className="space-y-2"><Label htmlFor="new-starts-at">Début</Label><Input id="new-starts-at" name="startsAt" type="datetime-local" required /></div>
+                <div className="space-y-2"><Label htmlFor="new-ends-at">Fin</Label><Input id="new-ends-at" name="endsAt" type="datetime-local" required /></div>
+                <div className="space-y-2"><Label htmlFor="new-occurrence-status">État de la date</Label><select id="new-occurrence-status" name="occurrenceStatus" className="h-9 rounded-lg border bg-background px-3"><option value="scheduled">Confirmé</option><option value="confirmation_pending">À confirmer</option><option value="cancelled">Annulé</option></select></div>
                 <label className="flex items-center gap-2"><input name="beginnerFriendly" type="checkbox" /> Débutants bienvenus</label>
                 <label className="flex items-center gap-2"><input name="registrationRequired" type="checkbox" /> Inscription requise</label>
               </>}
