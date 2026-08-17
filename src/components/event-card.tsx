@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatEventType, formatShortDate, formatTime, formatVerifiedDate } from '@/lib/format'
 import type { EventCardData } from '@/types/public-data'
+import { FavoriteButton } from '@/components/favorite-button'
 
 const statusLabels = {
   scheduled: 'Confirmé',
@@ -40,13 +41,12 @@ export function EventCard({ event, compact = false }: { event: EventCardData; co
       {!compact ? (
         <CardFooter className="flex items-center justify-between gap-3 border-t pt-4">
           <span className="text-xs text-muted-foreground">{formatVerifiedDate(event.lastVerifiedAt)}</span>
-          <Button
-            size="sm"
-            variant="outline"
-            render={<a href={event.sourceUrl} target="_blank" rel="noreferrer" />}
-          >
-            Source <ExternalLink />
-          </Button>
+          <div className="flex gap-2">
+            <FavoriteButton listingId={event.listingId} />
+            <Button size="sm" variant="outline" render={<a href={event.sourceUrl} target="_blank" rel="noreferrer" />}>
+              Source <ExternalLink />
+            </Button>
+          </div>
         </CardFooter>
       ) : null}
     </Card>

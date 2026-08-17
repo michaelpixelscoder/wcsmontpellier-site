@@ -8,9 +8,12 @@
  * @module
  */
 
+import type * as administration from "../administration.js";
 import type * as agenda from "../agenda.js";
 import type * as auth from "../auth.js";
 import type * as classes from "../classes.js";
+import type * as contributions from "../contributions.js";
+import type * as favorites from "../favorites.js";
 import type * as homepage from "../homepage.js";
 import type * as http from "../http.js";
 import type * as lib_authorization from "../lib/authorization.js";
@@ -27,9 +30,12 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  administration: typeof administration;
   agenda: typeof agenda;
   auth: typeof auth;
   classes: typeof classes;
+  contributions: typeof contributions;
+  favorites: typeof favorites;
   homepage: typeof homepage;
   http: typeof http;
   "lib/authorization": typeof lib_authorization;

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatVerifiedDate, formatWeekday } from '@/lib/format'
 import type { CourseCardData } from '@/types/public-data'
+import { FavoriteButton } from '@/components/favorite-button'
 
 export function CourseCard({ course }: { course: CourseCardData }) {
   const schedule = course.schedules[0]
@@ -39,13 +40,12 @@ export function CourseCard({ course }: { course: CourseCardData }) {
       </CardContent>
       <CardFooter className="mt-auto flex items-center justify-between gap-3 border-t pt-4">
         <span className="text-xs text-muted-foreground">{formatVerifiedDate(course.lastVerifiedAt)}</span>
-        <Button
-          size="sm"
-          variant="outline"
-          render={<a href={course.sourceUrl} target="_blank" rel="noreferrer" />}
-        >
-          Source <ExternalLink />
-        </Button>
+        <div className="flex gap-2">
+          <FavoriteButton listingId={course.id} />
+          <Button size="sm" variant="outline" render={<a href={course.sourceUrl} target="_blank" rel="noreferrer" />}>
+            Source <ExternalLink />
+          </Button>
+        </div>
       </CardFooter>
     </Card>
   )

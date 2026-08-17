@@ -77,5 +77,7 @@ const withAdministrator = customCtx(async (ctx: AuthCtx) => {
 
 export const authenticatedQuery = customQuery(query, withActiveUser);
 export const authenticatedMutation = customMutation(mutation, withActiveUser);
+export const contributorQuery = customQuery(query, withContributor);
 export const contributorMutation = customMutation(mutation, withContributor);
+export const administratorQuery = customQuery(query, withAdministrator);
 export const administratorMutation = customMutation(mutation, withAdministrator);

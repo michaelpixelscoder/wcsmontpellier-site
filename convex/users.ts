@@ -51,3 +51,20 @@ export const ensureProfile = authenticatedMutation({
     return null;
   },
 });
+
+export const updateDisplayName = authenticatedMutation({
+  args: { displayName: v.string() },
+  returns: v.null(),
+  handler: async (ctx, { displayName }) => {
+    const normalized = displayName.trim();
+    if (normalized.length < 2 || normalized.length > 80) {
+      throw new Error("Le nom doit contenir entre 2 et 80 caractères.");
+    }
+    await ctx.db.patch("users", ctx.user._id, {
+      name: normalized,
+      displayName: normalized,
+      updatedAt: Date.now(),
+    });
+    return null;
+  },
+});

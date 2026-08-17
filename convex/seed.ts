@@ -165,24 +165,25 @@ export const seedDemoData = internalMutation({
     occurrences: v.number(),
   }),
   handler: async (ctx) => {
-    const fixtureUserEmail = "fixture-admin@wcsmontpellier.invalid";
-    const fixtureUser = await ctx.db
-      .query("users")
-      .withIndex("email", (q) => q.eq("email", fixtureUserEmail))
-      .unique();
-    const fixtureUserValue = {
-      name: "Administrateur de démonstration",
-      displayName: "Administrateur de démonstration",
-      email: fixtureUserEmail,
-      role: "administrator" as const,
-      status: "active" as const,
-      updatedAt: FIXTURE_NOW,
+    const upsertFixtureUser = async (
+      email: string,
+      displayName: string,
+      role: "user" | "contributor" | "administrator",
+    ) => {
+      const existing = await ctx.db.query("users").withIndex("email", (q) => q.eq("email", email)).unique();
+      const value = { name: displayName, displayName, email, role, status: "active" as const, updatedAt: FIXTURE_NOW };
+      if (existing !== null) {
+        await ctx.db.patch("users", existing._id, value);
+        return existing._id;
+      }
+      return ctx.db.insert("users", value);
     };
-    const ownerUserId =
-      fixtureUser === null
-        ? await ctx.db.insert("users", fixtureUserValue)
-        : fixtureUser._id;
-    if (fixtureUser !== null) await ctx.db.patch("users", fixtureUser._id, fixtureUserValue);
+    await upsertFixtureUser("fixture-admin@wcsmontpellier.invalid", "Administrateur de démonstration", "administrator");
+    const contributorUserIds = [
+      await upsertFixtureUser("fixture-contributor-a@wcsmontpellier.invalid", "Contribution Démo A", "contributor"),
+      await upsertFixtureUser("fixture-contributor-b@wcsmontpellier.invalid", "Contribution Démo B", "contributor"),
+    ];
+    await upsertFixtureUser("fixture-user@wcsmontpellier.invalid", "Membre de démonstration", "user");
 
     const levels = {
       initiation: await upsertLevel(ctx, {
@@ -370,14 +371,14 @@ export const seedDemoData = internalMutation({
       },
     ];
 
-    for (const fixture of classFixtures) {
+    for (const [fixtureIndex, fixture] of classFixtures.entries()) {
       const listingId = await upsertListing(ctx, {
         slug: fixture.slug,
         kind: "class",
         title: fixture.title,
         summary: fixture.summary,
         description: `${fixture.summary} Cette fiche est entièrement fictive et sert uniquement au développement.`,
-        ownerUserId,
+        ownerUserId: contributorUserIds[fixtureIndex % contributorUserIds.length],
         sourceUrl: `${SOURCE_ROOT}/${fixture.slug}`,
         status: "published",
         verificationStatus: "contributor_verified",
@@ -475,14 +476,14 @@ export const seedDemoData = internalMutation({
       },
     ];
 
-    for (const fixture of eventFixtures) {
+    for (const [fixtureIndex, fixture] of eventFixtures.entries()) {
       const listingId = await upsertListing(ctx, {
         slug: fixture.slug,
         kind: "event",
         title: fixture.title,
         summary: fixture.summary,
         description: `${fixture.summary} Cette fiche est entièrement fictive et sert uniquement au développement.`,
-        ownerUserId,
+        ownerUserId: contributorUserIds[fixtureIndex % contributorUserIds.length],
         sourceUrl: `${SOURCE_ROOT}/${fixture.slug}`,
         status: "published",
         verificationStatus: "contributor_verified",

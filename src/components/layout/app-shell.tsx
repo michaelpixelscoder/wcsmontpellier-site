@@ -1,6 +1,9 @@
 import { useState } from 'react'
-import { Menu } from 'lucide-react'
+import { useAuthActions } from '@convex-dev/auth/react'
+import { useConvexAuth, useQuery } from 'convex/react'
+import { Heart, LogOut, Menu, Settings, SquarePen } from 'lucide-react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
+import { api } from '../../../convex/_generated/api'
 import { Button } from '@/components/ui/button'
 import { routes } from '@/routing/routes'
 
@@ -14,6 +17,14 @@ const primaryNavigation = [
 
 export function AppShell() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const { isAuthenticated } = useConvexAuth()
+  const { signOut } = useAuthActions()
+  const me = useQuery(api.users.me, isAuthenticated ? {} : 'skip')
+  const accountNavigation = isAuthenticated ? [
+    { label: 'Favoris', to: routes.favorites, icon: Heart },
+    ...(me?.role === 'contributor' || me?.role === 'administrator' ? [{ label: 'Contribution', to: routes.contribution, icon: SquarePen }] : []),
+    ...(me?.role === 'administrator' ? [{ label: 'Administration', to: routes.administration, icon: Settings }] : []),
+  ] : []
 
   return (
     <div className="min-h-svh">
@@ -37,9 +48,10 @@ export function AppShell() {
               </NavLink>
             ))}
           </nav>
-          <Button className="ml-auto hidden sm:inline-flex" render={<Link to={routes.signIn} />}>
-            Se connecter
-          </Button>
+          <div className="ml-auto hidden items-center gap-2 sm:flex">
+            {accountNavigation.map((item) => <Button key={item.to} size="sm" variant="ghost" render={<Link to={item.to} />}><item.icon />{item.label}</Button>)}
+            {isAuthenticated ? <Button size="sm" variant="outline" onClick={() => void signOut()}><LogOut />Déconnexion</Button> : <Button render={<Link to={routes.signIn} />}>Se connecter</Button>}
+          </div>
           <Button
             className="md:hidden"
             size="icon"
@@ -69,9 +81,8 @@ export function AppShell() {
                   {item.label}
                 </NavLink>
               ))}
-              <NavLink className="rounded-lg px-3 py-2 text-sm font-medium text-primary" onClick={() => setMobileMenuOpen(false)} to={routes.signIn}>
-                Se connecter
-              </NavLink>
+              {accountNavigation.map((item) => <NavLink className="rounded-lg px-3 py-2 text-sm font-medium text-primary" key={item.to} onClick={() => setMobileMenuOpen(false)} to={item.to}>{item.label}</NavLink>)}
+              {isAuthenticated ? <button className="rounded-lg px-3 py-2 text-left text-sm font-medium text-primary" onClick={() => { setMobileMenuOpen(false); void signOut() }}>Déconnexion</button> : <NavLink className="rounded-lg px-3 py-2 text-sm font-medium text-primary" onClick={() => setMobileMenuOpen(false)} to={routes.signIn}>Se connecter</NavLink>}
             </div>
           </nav>
         ) : null}
